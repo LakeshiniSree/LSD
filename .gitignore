@@ -24,12 +24,23 @@ cow_image.png
 # YOLO generated files
 runs/
 
-# Local environment
+# Local environments
 .venv/
 venv/
 env/
 
-# OS / editor
+# Secrets and local database
+.env
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Frontend
+node_modules/
+dist/
+
+# OS and editor
 .DS_Store
 Thumbs.db
 .vscode/
