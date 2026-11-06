@@ -6,3 +6,4 @@ ultralytics==8.4.174
 pillow==12.1.1
 numpy==2.4.2
 pydantic==2.12.5
+opencv-python-headless
