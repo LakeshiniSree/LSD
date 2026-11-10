@@ -177,11 +177,13 @@ async def predict(file: UploadFile = File(...)):
     # -----------------------------------------------------
 
     try:
+        yolo_start = time.perf_counter()
         yolo_results = cow_model.predict(
             source=img,
             conf=COW_DETECTION_CONFIDENCE,
             verbose=False,
         )
+        print("YOLO detection time:", round(time.perf_counter() - yolo_start, 2), "seconds")
 
         cow_found = False
         cow_confidence = 0.0
@@ -244,10 +246,12 @@ async def predict(file: UploadFile = File(...)):
     # -----------------------------------------------------
 
     try:
+        classifier_start = time.perf_counter()
         raw_prediction = model.predict(
             img_array,
             verbose=0
         )
+        print("LSD classification time:", round(time.perf_counter() - classifier_start, 2), "seconds")
 
         if raw_prediction.size != 1:
             raise ValueError(
