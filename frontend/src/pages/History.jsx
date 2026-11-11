@@ -1,5 +1,10 @@
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  getHistory,
+  deleteHistoryRecord,
+  clearHistory as clearBackendHistory,
+} from '../api';
 import {
   Search,
   History as HistoryIcon,
@@ -14,14 +19,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-function readHistory() {
-  try {
-    const data = JSON.parse(localStorage.getItem('lsdHistory') || '[]');
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
-}
+
 
 function formatDate(value) {
   const date = new Date(value);
@@ -50,7 +48,41 @@ function confidenceLabel(confidence) {
 }
 
 export default function History() {
-  const [records, setRecords] = useState(readHistory);
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [historyError, setHistoryError] = useState('');
+  useEffect(() => {
+  let active = true;
+
+  async function loadHistory() {
+    try {
+      setLoading(true);
+      setHistoryError('');
+
+      const data = await getHistory();
+
+      if (active) {
+        setRecords(data);
+      }
+    } catch (error) {
+      console.error('Could not load screening history:', error);
+
+      if (active) {
+        setHistoryError(
+          error.message || 'Unable to load screening history.'
+        );
+      }
+    } finally {
+      if (active) setLoading(false);
+    }
+  }
+
+  loadHistory();
+
+  return () => {
+    active = false;
+  };
+}, []);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('All');
   const [detail, setDetail] = useState(null);
@@ -82,28 +114,34 @@ export default function History() {
     (record) => record.prediction === 'Healthy'
   ).length;
 
-  function clearHistory() {
-    try {
-      localStorage.removeItem('lsdHistory');
-      setRecords([]);
-      setDetail(null);
-      setShowClearConfirm(false);
-    } catch {
-      setShowClearConfirm(false);
-    }
-  }
+  async function clearHistory() {
+  try {
+    await clearBackendHistory();
 
-  function deleteRecord(recordId) {
-    const updated = records.filter((record) => record.id !== recordId);
-
-    try {
-      localStorage.setItem('lsdHistory', JSON.stringify(updated));
-      setRecords(updated);
-      setDetail(null);
-    } catch (error) {
-      console.error('Could not update screening history:', error);
-    }
+    setRecords([]);
+    setDetail(null);
+    setShowClearConfirm(false);
+  } catch (error) {
+    console.error('Could not clear screening history:', error);
+    setHistoryError(error.message || 'Could not clear history.');
+    setShowClearConfirm(false);
   }
+}
+
+async function deleteRecord(recordId) {
+  try {
+    await deleteHistoryRecord(recordId);
+
+    setRecords((previous) =>
+      previous.filter((record) => record.id !== recordId)
+    );
+
+    setDetail(null);
+  } catch (error) {
+    console.error('Could not delete screening record:', error);
+    setHistoryError(error.message || 'Could not delete record.');
+  }
+}
 
   return (
     <div className="page">
@@ -168,7 +206,15 @@ export default function History() {
           </button>
         </div>
 
-        {filteredRecords.length === 0 ? (
+        {loading ? (
+  <div className="empty">
+    <p>Loading your screening history...</p>
+  </div>
+) : historyError ? (
+  <div className="error" role="alert">
+    {historyError}
+  </div>
+) : filteredRecords.length === 0 ? (
           <div className="empty">
             <FileImage size={34} />
 
@@ -249,9 +295,9 @@ export default function History() {
         )}
 
         <p className="muted-note">
-          Records are stored in this browser only. This demo is not a clinical
-          record system.
-        </p>
+  Records are stored securely in your account and can be accessed
+  across devices. This is not a clinical record system.
+</p>
       </section>
 
       {detail && (
@@ -355,8 +401,8 @@ export default function History() {
             </div>
 
             <p>
-              This removes all screening records saved in this browser.
-              This action cannot be undone.
+              This removes all screening records saved in your account.
+This action cannot be undone.
             </p>
 
             <div className="row">

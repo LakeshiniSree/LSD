@@ -11,7 +11,7 @@ import {
   RefreshCw,
   ArrowRight,
 } from 'lucide-react';
-import { predict } from '../api';
+import { predict, saveHistory } from '../api';
 import { useNavigate } from 'react-router-dom';
 
 export default function Detect() {
@@ -205,16 +205,16 @@ export default function Detect() {
         image: preview,
       };
 
-      const savedHistory = JSON.parse(
-        localStorage.getItem('lsdHistory') || '[]'
-      );
-
-      localStorage.setItem(
-        'lsdHistory',
-        JSON.stringify([item, ...savedHistory].slice(0, 200))
-      );
-
-      setResult(item);
+      try {
+        await saveHistory(item);
+        setResult(item);
+      } catch (historyError) {
+        console.error('History save failed:', historyError);
+  setResult(item);
+  setErr(
+    'Screening completed, but the history could not be saved. Please check your connection and login.'
+  );
+}
     } catch (error) {
       console.error('Screening request failed:', error);
 
@@ -439,7 +439,7 @@ export default function Detect() {
             [
               '3',
               'History record',
-              'Successful responses are saved in this browser.',
+              'Successful responses are saved securely to your account.',
             ],
           ].map((step) => (
             <div className="mini-step" key={step[0]}>

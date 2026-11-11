@@ -359,6 +359,23 @@ def init_user_database():
                 FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
             )
         """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS screening_history (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                cow TEXT NOT NULL DEFAULT 'Cow not specified',
+                timestamp TEXT NOT NULL,
+                prediction TEXT NOT NULL,
+                confidence REAL,
+                message TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        """)
+        connection.execute("""
+            CREATE INDEX IF NOT EXISTS idx_screening_history_user_timestamp
+            ON screening_history(user_id, timestamp DESC)
+        """)
         connection.commit()
 
 
@@ -387,6 +404,15 @@ class ProfileRequest(BaseModel):
     location: str = Field(default="", max_length=200)
     clinic: str = Field(default="", max_length=160)
     notifications: bool = True
+
+
+class ScreeningHistoryCreate(BaseModel):
+    id: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    cow: str = Field(default="Cow not specified", max_length=160)
+    timestamp: str = Field(min_length=1, max_length=64)
+    prediction: str = Field(min_length=1, max_length=80)
+    confidence: Optional[float] = Field(default=None, ge=0, le=100)
+    message: str = Field(default="", max_length=2000)
 
 
 def hash_password(password: str) -> str:
@@ -531,7 +557,103 @@ def update_profile(data: ProfileRequest, user=Depends(get_current_user)):
 
 
 # =========================================================
-# 7. EMAIL PASSWORD RESET (ADDED; PREDICTION CODE UNCHANGED)
+# 7. PER-USER SCREENING HISTORY
+# =========================================================
+
+@app.get("/history")
+def get_screening_history(user=Depends(get_current_user)):
+    """Return only the signed-in user's screening records."""
+    with get_db() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, cow, timestamp, prediction, confidence, message
+            FROM screening_history
+            WHERE user_id = ?
+            ORDER BY timestamp DESC, created_at DESC
+            """,
+            (user["id"],),
+        ).fetchall()
+
+    return {"history": [dict(row) for row in rows]}
+
+
+@app.post("/history", status_code=201)
+def save_screening_history(
+    data: ScreeningHistoryCreate,
+    user=Depends(get_current_user),
+):
+    """Save a screening record for the signed-in user only."""
+    record_id = data.id or f"LSD-{uuid.uuid4()}"
+    with get_db() as connection:
+        connection.execute(
+            """
+            INSERT INTO screening_history
+                (id, user_id, cow, timestamp, prediction, confidence, message)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                cow = excluded.cow,
+                timestamp = excluded.timestamp,
+                prediction = excluded.prediction,
+                confidence = excluded.confidence,
+                message = excluded.message
+            WHERE screening_history.user_id = excluded.user_id
+            """,
+            (
+                record_id,
+                user["id"],
+                data.cow.strip() or "Cow not specified",
+                data.timestamp,
+                data.prediction,
+                data.confidence,
+                data.message,
+            ),
+        )
+        connection.commit()
+
+    return {
+        "id": record_id,
+        "cow": data.cow.strip() or "Cow not specified",
+        "timestamp": data.timestamp,
+        "prediction": data.prediction,
+        "confidence": data.confidence,
+        "message": data.message,
+    }
+
+
+@app.delete("/history/{record_id}")
+def delete_screening_history(
+    record_id: str,
+    user=Depends(get_current_user),
+):
+    """Delete one record only if it belongs to the signed-in user."""
+    with get_db() as connection:
+        cursor = connection.execute(
+            "DELETE FROM screening_history WHERE id = ? AND user_id = ?",
+            (record_id, user["id"]),
+        )
+        connection.commit()
+
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Screening record not found.")
+
+    return {"message": "Screening record deleted."}
+
+
+@app.delete("/history")
+def clear_screening_history(user=Depends(get_current_user)):
+    """Clear only the signed-in user's screening records."""
+    with get_db() as connection:
+        connection.execute(
+            "DELETE FROM screening_history WHERE user_id = ?",
+            (user["id"],),
+        )
+        connection.commit()
+
+    return {"message": "Your screening history has been cleared."}
+
+
+# =========================================================
+# 8. EMAIL PASSWORD RESET (ADDED; PREDICTION CODE UNCHANGED)
 # =========================================================
 
 class ForgotPasswordRequest(BaseModel):
