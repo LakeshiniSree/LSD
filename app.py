@@ -1,7 +1,10 @@
 
 from pathlib import Path
+from dotenv import load_dotenv
 import io
 import os
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent / ".env")
 import sqlite3
 import hashlib
 import hmac
@@ -21,6 +24,8 @@ from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from tensorflow.keras.models import load_model
 from ultralytics import YOLO
+# Load environment variables from the project root .env file
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 # =========================================================
@@ -447,9 +452,16 @@ def create_access_token(user_id: str) -> str:
 
 
 def get_current_user(authorization: Optional[str] = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
+    print("AUTHORIZATION RECEIVED:", authorization)
+    if not authorization:
         raise HTTPException(status_code=401, detail="Please sign in.")
-    token = authorization.split(" ", 1)[1].strip()
+
+    parts = authorization.split(" ", 1)
+
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Please sign in.")
+
+    token = parts[1].strip()
     try:
         payload_part, signature_part = token.split(".", 1)
         expected = hmac.new(AUTH_SECRET, payload_part.encode(), hashlib.sha256).digest()
@@ -784,3 +796,84 @@ def reset_password(data: ResetPasswordRequest):
         )
         connection.commit()
     return {"message": "Password updated successfully. You can now sign in."}
+
+# =========================================================
+# 9. PRIVATE ADMIN DASHBOARD API
+# =========================================================
+
+# Set LSD_ADMIN_EMAIL in Railway to the single email address that may
+# access the admin dashboard. Authorization is checked on the server.
+
+
+def require_admin(user=Depends(get_current_user)):
+    configured_emails = {
+        email.strip().lower()
+        for email in os.environ.get(
+            "LSD_ADMIN_EMAILS",
+            os.environ.get("LSD_ADMIN_EMAIL", "")
+        ).split(",")
+        if email.strip()
+    }
+
+    if not configured_emails:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin access is not configured."
+        )
+
+    user_email = str(user["email"]).strip().lower()
+
+    if user_email not in configured_emails:
+        raise HTTPException(
+            status_code=403,
+            detail="You are not authorized to access the admin dashboard."
+        )
+
+    return user
+
+
+
+@app.get("/admin/overview")
+def admin_overview(admin=Depends(require_admin)):
+    """Return registered users and screening totals without exposing passwords."""
+    try:
+        with get_db() as connection:
+            users = connection.execute(
+                """
+                SELECT u.id, u.name, u.email, u.phone, u.role, u.created_at,
+                       COUNT(h.id) AS screening_count
+                FROM users AS u
+                LEFT JOIN screening_history AS h ON h.user_id = u.id
+                GROUP BY u.id, u.name, u.email, u.phone, u.role, u.created_at
+                ORDER BY u.created_at DESC
+                """
+            ).fetchall()
+            total_screenings = connection.execute(
+                "SELECT COUNT(*) FROM screening_history"
+            ).fetchone()[0]
+    except sqlite3.OperationalError as exc:
+        if "screening_history" in str(exc).lower():
+            raise HTTPException(
+                status_code=503,
+                detail="Screening history table is not initialized yet.",
+            ) from exc
+        raise
+
+    safe_users = [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "email": row["email"],
+            "phone": row["phone"],
+            "role": row["role"],
+            "created_at": row["created_at"],
+            "screening_count": int(row["screening_count"] or 0),
+        }
+        for row in users
+    ]
+    return {
+        "total_users": len(safe_users),
+        "total_screenings": int(total_screenings or 0),
+        "users": safe_users,
+    }
+

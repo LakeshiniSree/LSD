@@ -44,3 +44,10 @@ dist/
 .DS_Store
 Thumbs.db
 .vscode/
+# Temporary backup and notes
+app_backup.py
+*_snippet.jsx.txt
+admin.css.txt
+
+# Frontend production environment
+frontend/.env.production

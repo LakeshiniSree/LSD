@@ -13,11 +13,20 @@ import Detect from './pages/Detect.jsx';
 import History from './pages/History.jsx';
 import Guidance from './pages/Guidance.jsx';
 import Profile from './pages/Profile.jsx';
-import { Login, Signup, Forgot, ResetPassword } from './pages/Auth.jsx';
+import Admin from './pages/Admin.jsx';
+
+import {
+  Login,
+  Signup,
+  Forgot,
+  ResetPassword,
+} from './pages/Auth.jsx';
 
 function getUser() {
   try {
-    return JSON.parse(localStorage.getItem('lsdCurrentUser') || 'null');
+    return JSON.parse(
+      localStorage.getItem('lsdCurrentUser') || 'null'
+    );
   } catch {
     return null;
   }
@@ -27,23 +36,31 @@ export default function App() {
   const [user, setUser] = useState(getUser);
   const navigate = useNavigate();
 
+  // Login
   function login(userData) {
-    localStorage.setItem('lsdCurrentUser', JSON.stringify(userData));
+    localStorage.setItem(
+      'lsdCurrentUser',
+      JSON.stringify(userData)
+    );
+
     setUser(userData);
     navigate('/app/home', { replace: true });
   }
 
+  // Logout
   function logout() {
     localStorage.removeItem('lsdCurrentUser');
     setUser(null);
     navigate('/login', { replace: true });
   }
 
+  // Update user profile
   function updateUser(updatedUser) {
     localStorage.setItem(
       'lsdCurrentUser',
       JSON.stringify(updatedUser)
     );
+
     setUser(updatedUser);
   }
 
@@ -53,7 +70,11 @@ export default function App() {
       <Route
         path="/"
         element={
-          user ? <Navigate to="/app/home" replace /> : <Welcome />
+          user ? (
+            <Navigate to="/app/home" replace />
+          ) : (
+            <Welcome />
+          )
         }
       />
 
@@ -101,31 +122,37 @@ export default function App() {
           )
         }
       >
+        {/* Default application page */}
         <Route
           index
           element={<Navigate to="home" replace />}
         />
 
+        {/* Home */}
         <Route
           path="home"
           element={<Home user={user} />}
         />
 
+        {/* Disease detection */}
         <Route
           path="detect"
           element={<Detect />}
         />
 
+        {/* Screening history */}
         <Route
           path="history"
           element={<History />}
         />
 
+        {/* Guidance */}
         <Route
           path="guidance"
           element={<Guidance />}
         />
 
+        {/* User profile */}
         <Route
           path="profile"
           element={
@@ -135,6 +162,12 @@ export default function App() {
               logout={logout}
             />
           }
+        />
+
+        {/* Admin dashboard */}
+        <Route
+          path="admin"
+          element={<Admin />}
         />
       </Route>
 

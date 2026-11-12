@@ -8,16 +8,30 @@ import {
   UserRound,
   LogOut,
   Stethoscope,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function Layout({ user, logout }) {
-  const links = [
-    ['/app/home', 'Home', House],
-    ['/app/detect', 'Detect', Camera],
-    ['/app/history', 'History', History],
-    ['/app/guidance', 'Guidance', BookOpen],
-    ['/app/profile', 'Profile', UserRound],
-  ];
+  
+const adminEmails = [
+  "lakeshinisreekuntamukkala@gmail.com",
+  "narenderdammalapati12@gmail.com"
+];
+
+const links = [
+  ['/app/home', 'Home', House],
+  ['/app/detect', 'Detect', Camera],
+  ['/app/history', 'History', History],
+  ['/app/guidance', 'Guidance', BookOpen],
+  ['/app/profile', 'Profile', UserRound],
+
+  ...(adminEmails.includes(
+    String(user?.email || '').trim().toLowerCase()
+  )
+    ? [['/app/admin', 'Admin Dashboard', ShieldCheck]]
+    : [])
+];
+
 
   return (
     <div className="shell">

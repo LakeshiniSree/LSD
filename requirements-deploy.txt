@@ -9,3 +9,4 @@ pydantic==2.12.5
 opencv-python-headless
 torch==2.6.0
 torchvision==0.21.0
+python-dotenv
